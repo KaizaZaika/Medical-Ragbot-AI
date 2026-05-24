@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Vector database and large files
+vector_db_faiss.index
+texts_data.json
+*.index
+
+# Data files
+final_medical_qa.csv
+my_data/
+
+# Models
+models/
+
+# Node modules
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Git
+frontend/.git/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
