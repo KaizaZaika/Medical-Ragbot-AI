@@ -52,6 +52,12 @@ source venv/bin/activate
 
 Cài đặt các thư viện Python:
 
+**Cách 1 - Cài đặt từ requirements.txt (khuyên dùng):**
+```bash
+pip install -r requirements.txt
+```
+
+**Cách 2 - Cài đặt thủ công:**
 ```bash
 pip install fastapi uvicorn faiss-cpu numpy rank-bm25 ollama
 ```
