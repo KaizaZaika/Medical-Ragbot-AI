@@ -9,12 +9,14 @@ Hệ thống hỏi đáp y tế sử dụng công nghệ Hybrid RAG (Retrieval A
 - **LLM**: Ollama (gemma3:1b)
 - **Vector Search**: FAISS
 - **Keyword Search**: BM25
+- **Graph Database**: Neo4j (cho Knowledge Graph)
 - **Embedding Model**: bge-m3
 
 ## 📋 Yêu cầu hệ thống
 
 - Python 3.8+
 - Node.js 18+
+- Docker (cho Neo4j)
 - Ollama (cần cài đặt và chạy dịch vụ)
 
 ## 🔧 Cài đặt
@@ -30,7 +32,30 @@ ollama pull gemma3:1b
 ollama pull bge-m3
 ```
 
-### 2. Cài đặt Backend
+### 2. Cài đặt Neo4j với Docker
+
+Chạy Neo4j sử dụng Docker:
+
+```bash
+docker run -d \
+  --name neo4j \
+  -p 7474:7474 -p 7687:7687 \
+  -e NEO4J_AUTH=neo4j/password123 \
+  neo4j:latest
+```
+
+**Lưu ý:**
+- Port 7474: Neo4j Browser (http://localhost:7474)
+- Port 7687: Bolt protocol cho kết nối ứng dụng
+- Username: `neo4j`
+- Password: `password123` (có thể thay đổi)
+
+Kiểm tra Neo4j đang chạy:
+```bash
+docker ps
+```
+
+### 3. Cài đặt Backend
 
 Tạo virtual environment (khuyên dùng):
 
@@ -62,7 +87,7 @@ pip install -r requirements.txt
 pip install fastapi uvicorn faiss-cpu numpy rank-bm25 ollama
 ```
 
-### 3. Cài đặt Frontend
+### 4. Cài đặt Frontend
 
 Di chuyển vào thư mục frontend:
 
@@ -81,6 +106,21 @@ Quay lại thư mục gốc:
 ```bash
 cd ..
 ```
+
+### 5. Sử dụng Neo4j Knowledge Graph (Tùy chọn)
+
+Nếu muốn sử dụng Knowledge Graph với Neo4j, chạy các script sau:
+
+**Chạy chunking.py để nạp dữ liệu vào Neo4j:**
+```bash
+python chunking.py
+```
+
+**Chạy ingest_vihealthqa_neo4j.py để xây dựng Knowledge Graph với AI:**
+```bash
+python ingest_vihealthqa_neo4j.py --input final_medical_qa.jsonl --limit 10
+```
+- `--limit`: Số lượng dòng muốn xử lý (để 0 để chạy hết, cẩn thận tốn token)
 
 ## 🚀 Chạy ứng dụng
 
