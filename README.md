@@ -37,11 +37,10 @@ ollama pull bge-m3
 Chạy Neo4j sử dụng Docker:
 
 ```bash
-docker run -d \
-  --name neo4j \
-  -p 7474:7474 -p 7687:7687 \
-  -e NEO4J_AUTH=neo4j/password123 \
-  neo4j:latest
+docker pull qdrant/qdrant
+
+docker pull neo4j
+
 ```
 
 **Lưu ý:**
@@ -82,45 +81,10 @@ Cài đặt các thư viện Python:
 pip install -r requirements.txt
 ```
 
-**Cách 2 - Cài đặt thủ công:**
-```bash
-pip install fastapi uvicorn faiss-cpu numpy rank-bm25 ollama
-```
 
-### 4. Cài đặt Frontend
 
-Di chuyển vào thư mục frontend:
 
-```bash
-cd frontend
-```
 
-Cài đặt các thư viện Node.js:
-
-```bash
-npm install
-```
-
-Quay lại thư mục gốc:
-
-```bash
-cd ..
-```
-
-### 5. Sử dụng Neo4j Knowledge Graph (Tùy chọn)
-
-Nếu muốn sử dụng Knowledge Graph với Neo4j, chạy các script sau:
-
-**Chạy chunking.py để nạp dữ liệu vào Neo4j:**
-```bash
-python chunking.py
-```
-
-**Chạy ingest_vihealthqa_neo4j.py để xây dựng Knowledge Graph với AI:**
-```bash
-python ingest_vihealthqa_neo4j.py --input final_medical_qa.jsonl --limit 10
-```
-- `--limit`: Số lượng dòng muốn xử lý (để 0 để chạy hết, cẩn thận tốn token)
 
 ## 🚀 Chạy ứng dụng
 
@@ -129,7 +93,7 @@ python ingest_vihealthqa_neo4j.py --input final_medical_qa.jsonl --limit 10
 Mở terminal, kích hoạt virtual environment và chạy:
 
 ```bash
-uvicorn main1:app --reload
+uvicorn main0:app 
 ```
 
 Backend sẽ chạy tại: `http://localhost:8000`

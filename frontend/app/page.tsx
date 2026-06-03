@@ -23,9 +23,21 @@ export default function ChatApp() {
       });
 
       const data = await res.json();
-      setMessages([...newMessages, { role: 'ai', content: data.ai_response }]);
+
+console.log(data);
+
+setMessages([
+  ...newMessages,
+  {
+    role: 'ai',
+    content:
+      data.ai_response ||
+      data.error ||
+      'Không có phản hồi từ server'
+  }
+]);
     } catch (error) {
-      setMessages([...newMessages, { role: 'ai', content: 'Lỗi server mẹ rồi, check lại backend đi!' }]);
+      setMessages([...newMessages, { role: 'ai', content: 'Lỗi server ' }]);
     } finally {
       setLoading(false);
     }
@@ -51,7 +63,7 @@ export default function ChatApp() {
             </div>
           </div>
         ))}
-        {loading && <div className="text-gray-400 text-sm italic pl-4">Bác sĩ AI đang lục Neo4j...</div>}
+        {loading && <div className="text-gray-400 text-sm italic pl-4">Đang chay  Neo4j...</div>}
       </main>
 
       <footer className="p-4 bg-white border-t max-w-3xl mx-auto w-full">

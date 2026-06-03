@@ -2,9 +2,11 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
+import asyncio
+import ollama
+
 import faiss
 import numpy as np
-import ollama
 
 from rank_bm25 import BM25Okapi
 
@@ -13,15 +15,12 @@ import os
 import traceback
 
 # =====================================================
-# BASE DIR
+# CONFIG
 # =====================================================
 BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
 
-# =====================================================
-# PATHS
-# =====================================================
 DATA_PATH = os.path.join(
     BASE_DIR,
     "final_medical_qa.jsonl"
@@ -40,6 +39,11 @@ TEXTS_MAP_PATH = os.path.join(
 # =====================================================
 # MODELS
 # =====================================================
+
+# LIGHT MODEL
+OLLAMA_MODEL = "qwen2.5:0.5b"
+
+# EMBEDDING
 EMBED_MODEL = "bge-m3"
 
 # =====================================================
@@ -64,7 +68,7 @@ class ChatRequest(BaseModel):
     message: str
 
 # =====================================================
-# GLOBAL VARIABLES
+# GLOBAL
 # =====================================================
 texts = []
 
@@ -73,55 +77,7 @@ index = None
 bm25 = None
 
 # =====================================================
-# EMBEDDING
-# =====================================================
-def embed_texts(texts_list):
-
-    embeddings = []
-
-    print(f"\n🧠 Embedding {len(texts_list)} docs...\n")
-
-    for i, text in enumerate(texts_list):
-
-        response = ollama.embeddings(
-            model=EMBED_MODEL,
-            prompt=text
-        )
-
-        embedding = np.array(
-            response["embedding"],
-            dtype="float32"
-        )
-
-        # FIX DIMENSION = 768
-        if embedding.shape[0] > 768:
-
-            embedding = embedding[:768]
-
-        elif embedding.shape[0] < 768:
-
-            padding = np.zeros(
-                768 - embedding.shape[0],
-                dtype="float32"
-            )
-
-            embedding = np.concatenate(
-                [embedding, padding]
-            )
-
-        embeddings.append(
-            embedding
-        )
-
-        print(f"✅ {i+1}")
-
-    return np.array(
-        embeddings,
-        dtype="float32"
-    )
-
-# =====================================================
-# QUERY EMBEDDING
+# EMBED QUERY
 # =====================================================
 def embed_query(query):
 
@@ -135,7 +91,7 @@ def embed_query(query):
         dtype="float32"
     )
 
-    # FIX DIMENSION = 768
+    # FIX DIMENSION
     if embedding.shape[0] > 768:
 
         embedding = embedding[:768]
@@ -154,128 +110,39 @@ def embed_query(query):
     return embedding.reshape(1, -1)
 
 # =====================================================
-# BM25
-# =====================================================
-def build_bm25():
-
-    global bm25
-
-    tokenized_texts = [
-
-        text.lower().split()
-
-        for text in texts
-    ]
-
-    bm25 = BM25Okapi(
-        tokenized_texts
-    )
-
-    print("✅ BM25 Ready!")
-
-# =====================================================
 # LOAD DB
 # =====================================================
-if (
-    os.path.exists(DB_FAISS_PATH)
-    and
-    os.path.exists(TEXTS_MAP_PATH)
-):
+print("📂 Loading DB...")
 
-    print("📂 Loading existing DB...")
+index = faiss.read_index(
+    DB_FAISS_PATH
+)
 
-    index = faiss.read_index(
-        DB_FAISS_PATH
-    )
+with open(
+    TEXTS_MAP_PATH,
+    "r",
+    encoding="utf-8"
+) as f:
 
-    with open(
-        TEXTS_MAP_PATH,
-        "r",
-        encoding="utf-8"
-    ) as f:
+    texts = json.load(f)
 
-        texts = json.load(f)
-
-    print(f"✅ Loaded {len(texts)} docs")
-
-    build_bm25()
+print(f"✅ Loaded {len(texts)} docs")
 
 # =====================================================
-# BUILD DB
+# BM25
 # =====================================================
-else:
+tokenized_texts = [
 
-    print("🆕 Building DB...")
+    text.lower().split()
 
-    with open(
-        DATA_PATH,
-        "r",
-        encoding="utf-8"
-    ) as f:
+    for text in texts
+]
 
-        for line in f:
+bm25 = BM25Okapi(
+    tokenized_texts
+)
 
-            data = json.loads(line)
-
-            question = data.get(
-                "question",
-                ""
-            )
-
-            answer = data.get(
-                "answer",
-                ""
-            )
-
-            text = f"""
-Câu hỏi:
-{question}
-
-Trả lời:
-{answer}
-"""
-
-            texts.append(text)
-
-    embeddings = embed_texts(
-        texts
-    )
-
-    faiss.normalize_L2(
-        embeddings
-    )
-
-    dimension = embeddings.shape[1]
-
-    index = faiss.IndexFlatIP(
-        dimension
-    )
-
-    index.add(
-        embeddings
-    )
-
-    faiss.write_index(
-        index,
-        DB_FAISS_PATH
-    )
-
-    with open(
-        TEXTS_MAP_PATH,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        json.dump(
-            texts,
-            f,
-            ensure_ascii=False,
-            indent=4
-        )
-
-    print("💾 DB Saved!")
-
-    build_bm25()
+print("✅ BM25 Ready")
 
 # =====================================================
 # VECTOR SEARCH
@@ -390,6 +257,62 @@ def rerank_documents(
     ]
 
 # =====================================================
+# REWRITE ANSWER
+# =====================================================
+async def refine_answer(raw_answer):
+
+    prompt = f"""
+Bạn là AI y tế.
+
+Hãy viết lại nội dung sau thành câu trả lời:
+- tự nhiên
+- giống chatbot
+- ngắn gọn
+- dễ hiểu
+- thân thiện
+- không lan man
+- không copy y nguyên
+
+Nội dung:
+{raw_answer}
+
+Câu trả lời:
+"""
+
+    try:
+
+        response = await asyncio.to_thread(
+
+            ollama.chat,
+
+            model=OLLAMA_MODEL,
+
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+
+            options={
+                "temperature": 0.3,
+                "num_predict": 80
+            }
+        )
+
+        ai_text = response["message"]["content"]
+
+        if not ai_text.strip():
+
+            return raw_answer
+
+        return ai_text.strip()
+
+    except:
+
+        return raw_answer
+
+# =====================================================
 # CHAT API
 # =====================================================
 @app.post("/api/chat")
@@ -401,7 +324,7 @@ async def chat_with_aimed(
 
         user_msg = request.message.strip()
 
-        print("\n====================")
+        print("\n===================")
         print("👤 USER:", user_msg)
 
         if not user_msg:
@@ -410,9 +333,9 @@ async def chat_with_aimed(
                 "error": "Tin nhắn rỗng"
             }
 
-        # =============================================
+        # ============================================
         # SEARCH
-        # =============================================
+        # ============================================
         vector_docs = vector_search(
             user_msg,
             k=5
@@ -435,27 +358,26 @@ async def chat_with_aimed(
             top_k=3
         )
 
-        # =============================================
-        # DEBUG
-        # =============================================
-        print("\n📄 FINAL DOCS:\n")
+        # ============================================
+        # EXTRACT ANSWER
+        # ============================================
+        best_doc = docs[0]
 
-        for i, doc in enumerate(docs):
+        raw_answer = best_doc.split(
+            "Trả lời:"
+        )[-1].strip()
 
-            print(f"\n========== DOC {i+1} ==========\n")
+        print("\n📄 RAW ANSWER:\n")
+        print(raw_answer)
 
-            print(doc[:500])
+        # ============================================
+        # REFINE
+        # ============================================
+        ai_text = await refine_answer(
+            raw_answer
+        )
 
-        # =============================================
-        # FAST ANSWER
-        # =============================================
-        ai_text = f"""
-Theo dữ liệu tìm được:
-
-{docs[0].split("Trả lời:")[-1].strip()}
-"""
-
-        print("\n🤖 RESPONSE:\n")
+        print("\n🤖 FINAL ANSWER:\n")
         print(ai_text)
 
         return {
@@ -469,7 +391,7 @@ Theo dữ liệu tìm được:
 
     except Exception as e:
 
-        print("\n❌ CHAT ERROR")
+        print("\n❌ ERROR")
         traceback.print_exc()
 
         return {
@@ -488,9 +410,7 @@ async def home():
 
         "documents": len(texts),
 
-        "index_loaded": index is not None,
-
-        "embedding_model": EMBED_MODEL
+        "model": OLLAMA_MODEL
     }
 
 # =====================================================
@@ -498,5 +418,6 @@ async def home():
 # =====================================================
 
 # pip install fastapi uvicorn faiss-cpu numpy rank-bm25 ollama
+# ollama pull qwen2.5:0.5b
 # ollama pull bge-m3
 # uvicorn main:app --reload
